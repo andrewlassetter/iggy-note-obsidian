@@ -52,10 +52,10 @@ export function generateMarkdown(data: NoteTemplateData): string {
       ? `## Decisions\n\n${decisions.map((d) => `- ${d}`).join('\n')}`
       : null
 
-  // --- Action Items ---
+  // --- Tasks ---
   const actionItemsSection =
     actionItems.length > 0
-      ? `## Action Items\n\n${actionItems
+      ? `## Tasks\n\n${actionItems
           .map((a) => {
             let line = `- [ ] ${a.content}`
             if (a.owner) line += ` (Owner: ${a.owner})`
