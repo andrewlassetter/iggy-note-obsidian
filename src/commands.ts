@@ -32,17 +32,20 @@ async function processAudioFile(plugin: IggyNotePlugin, file: TFile): Promise<vo
     return
   }
 
+  let step = 'reading file'
   try {
     new Notice(`Iggy Note: Reading "${file.name}"…`)
     const rawBuffer = await app.vault.readBinary(file)
 
+    step = 'pre-processing audio'
     new Notice('Iggy Note: Pre-processing audio…')
     const processed = await preprocessAudio(rawBuffer, file.name)
     if (processed.wasCompressed) {
       new Notice(`Iggy Note: Compressed ${formatBytes(rawBuffer.byteLength)} → ${formatBytes(processed.buffer.byteLength)}`)
     }
 
-    new Notice('Iggy Note: Transcribing…')
+    step = 'transcribing'
+    new Notice('Iggy Note: Transcribing (this may take up to a minute for longer recordings)…')
     const transcriptionProvider =
       settings.transcriptionProvider === 'deepgram'
         ? new DeepgramProvider(settings.deepgramKey)
@@ -53,6 +56,7 @@ async function processAudioFile(plugin: IggyNotePlugin, file: TFile): Promise<vo
       processed.filename
     )
 
+    step = 'generating note'
     new Notice('Iggy Note: Generating structured note…')
     const summarizationProvider =
       settings.summarizationProvider === 'anthropic'
@@ -65,6 +69,7 @@ async function processAudioFile(plugin: IggyNotePlugin, file: TFile): Promise<vo
     }
     const noteContent = await summarizationProvider.summarize(transcript, meta)
 
+    step = 'writing note'
     const date = new Date().toISOString().slice(0, 10)
     const createdFile = await writeNote(app, noteContent, {
       outputFolder: settings.outputFolder,
@@ -81,11 +86,10 @@ async function processAudioFile(plugin: IggyNotePlugin, file: TFile): Promise<vo
     const leaf = app.workspace.getLeaf(false)
     await leaf.openFile(createdFile)
   } catch (err) {
-    console.error('[Iggy Note] Pipeline error:', err)
-    new Notice(
-      `Iggy Note: Error — ${err instanceof Error ? err.message : String(err)}`,
-      10000
-    )
+    const message = err instanceof Error ? err.message : String(err)
+    const friendlyMessage = friendlyError(message, step)
+    console.error(`[Iggy Note] Error during "${step}":`, err)
+    new Notice(`Iggy Note: Failed during ${step} — ${friendlyMessage}`, 10000)
   }
 }
 
@@ -188,4 +192,28 @@ export function registerCommands(plugin: IggyNotePlugin): void {
 
 function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function friendlyError(message: string, step: string): string {
+  const lower = message.toLowerCase()
+
+  if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('invalid_api_key')) {
+    return 'invalid API key — check your key in plugin settings'
+  }
+  if (lower.includes('429') || lower.includes('rate limit') || lower.includes('quota')) {
+    return 'API rate limit or quota exceeded — try again shortly'
+  }
+  if (lower.includes('413') || lower.includes('too large') || lower.includes('file size')) {
+    return 'audio file is too large for the API — try a shorter recording'
+  }
+  if (lower.includes('fetch') || lower.includes('network') || lower.includes('econnrefused') || lower.includes('enotfound')) {
+    return step === 'reading file'
+      ? 'could not read file — ensure it is fully synced and not stored only in iCloud'
+      : 'network request failed — check your internet connection'
+  }
+  if (lower.includes('could not decode') || lower.includes('decodeaudiodata') || lower.includes('dom exception')) {
+    return 'could not decode audio — the file format may not be supported'
+  }
+
+  return message
 }
