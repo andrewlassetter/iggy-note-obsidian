@@ -15,7 +15,7 @@ _Last updated: 2026-03-06_
 - **Claude summarization** — `src/ai/providers/claude.ts`: `claude-sonnet-4-6`, 3000 max tokens, uses `requestUrl` (CORS fix)
 - **GPT-4o Mini summarization** — `src/ai/providers/openai.ts`: `gpt-4o-mini`, JSON mode (`response_format: json_object`), uses `requestUrl`
 - **Note writer** — `src/notes/writer.ts`: sanitizes title for filename, creates output folder if missing, file collision handling (overwrite existing on same date + title)
-- **Markdown template** — `src/notes/template.ts`: YAML frontmatter (`igggy_id`, title, date, type, `duration_sec`, `audio:`, `source: igggy`, tags), audio embed (`![[path]]`), Summary, prose content paragraphs, Key Highlights, Decisions, Action Items (as `- [ ]` checkboxes with owner + context), collapsible Transcript `<details>`
+- **Markdown template** — `src/notes/template.ts`: YAML frontmatter (`igggy_id`, title, date, type, `duration_sec`, `audio:`, `source: igggy`, tags), audio embed (`![[path]]`), Summary, prose content paragraphs, Key Highlights, Decisions, Tasks (as `- [ ]` checkboxes with owner + context), collapsible Transcript `<details>`
 - **Settings** — `src/settings.ts` + `src/settings-tab.ts`: provider dropdowns (OpenAI/Deepgram, OpenAI/Anthropic), API key fields, output folder, embed audio toggle; saved via `loadData()/saveData()`
 
 ### Entry Points & UX
@@ -122,7 +122,7 @@ _(nothing currently active)_
 - **Email capture** (Email Capture Layer doc): forward-to-inbox via Postmark Inbound → `/api/email-inbound` → `EMAIL` note type → plugin sync; estimated ~2–3 days after hosted plan ships
 
 ### Plugin Feature Backlog (from competitive gap analysis)
-- **Unified task list** — aggregate `- [ ]` action items across all Igggy notes into a single view (Pro feature)
+- **Unified task list** — aggregate `- [ ]` tasks across all Igggy notes into a single view (Pro feature)
 - **Smart audio deletion** — optional: delete source audio after successful transcription (user opt-in setting)
 - In-progress recording capture (native record button in plugin, not just file-picker)
 - Screenshots/demo GIF in README
