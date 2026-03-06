@@ -8,7 +8,7 @@ export default class IggyNotePlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings()
-    this.addRibbonIcon('mic', 'Process audio with Iggy Note', () => openAudioFilePicker(this))
+    this.addRibbonIcon('audio-waveform', 'Process audio with Iggy Note', () => openAudioFilePicker(this))
     registerCommands(this)
     registerMenus(this)
     this.addSettingTab(new IggyNoteSettingsTab(this.app, this))
