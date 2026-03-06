@@ -49,3 +49,4 @@ Audio files in the user's Obsidian vault are selected via a fuzzy modal or conte
 |---|---|
 | `STATUS.md` | What's built, in progress, planned, and backlog |
 | `SERVICES.md` | Third-party services registry with rationale |
+| `2026-03-06 - Obsidian Plugin UI Design Research.md` | Obsidian plugin UI capabilities: extension points, CSS variables, built-in components, design guidelines |

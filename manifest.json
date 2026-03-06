@@ -6,5 +6,6 @@
   "description": "Record → transcribe → AI structured notes, right in your vault. Bring your own API keys.",
   "author": "Andrew Lassetter",
   "authorUrl": "https://igggy.com",
-  "isDesktopOnly": true
+  "isDesktopOnly": true,
+  "fundingUrl": "https://igggy.ai"
 }
