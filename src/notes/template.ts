@@ -3,6 +3,7 @@ import type { NoteContent } from '../ai/providers/types'
 export interface NoteTemplateData {
   noteContent: NoteContent
   date: string           // YYYY-MM-DD
+  igggyId: string        // stable UUID — written as igggy_id in frontmatter
   transcript?: string
   durationSec?: number
   audioPath?: string     // vault-relative path to audio file
@@ -10,19 +11,19 @@ export interface NoteTemplateData {
 }
 
 export function generateMarkdown(data: NoteTemplateData): string {
-  const { noteContent, date, transcript, durationSec, audioPath, embedAudio } = data
+  const { noteContent, date, igggyId, transcript, durationSec, audioPath, embedAudio } = data
   const { noteType, title, summary, content, keyTopics, decisions, actionItems } = noteContent
-
-  const durationStr = durationSec ? `${Math.round(durationSec / 60)} min` : null
 
   // --- Frontmatter ---
   const frontmatterLines = [
     '---',
+    `igggy_id: ${igggyId}`,
     `title: "${title}"`,
     `date: ${date}`,
     `type: ${noteType}`,
-    durationStr ? `duration: ${durationStr}` : null,
-    audioPath ? `source: "${audioPath}"` : null,
+    durationSec != null ? `duration_sec: ${durationSec}` : null,
+    audioPath ? `audio: "${audioPath}"` : null,
+    'source: igggy',
     `tags: [igggy, ${noteType.toLowerCase()}]`,
     '---',
   ].filter(Boolean) as string[]

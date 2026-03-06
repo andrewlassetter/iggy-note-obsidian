@@ -11,11 +11,11 @@ _Last updated: 2026-03-06_
 - **Audio pre-processor** — `src/audio/preprocessor.ts`: Web Audio API + lamejs; skips files under 10MB, decodes to PCM, mixes to mono, downsamples to 16kHz, encodes to 32kbps MP3; ~57MB → ~14MB for 1-hour meetings
 - **OpenAI Whisper transcription** — `src/audio/providers/openai.ts`: `whisper-1`, `verbose_json` response format, returns transcript + durationSec; uses `fetch` (FormData/multipart — documented intentional exception to `requestUrl`)
 - **Deepgram Nova-3 transcription** — `src/audio/providers/deepgram.ts`: `nova-3` with `smart_format`, `diarize`, `paragraphs`; multi-speaker detection with `[Speaker N]:` prefixing; uses `requestUrl` with raw ArrayBuffer body
-- **Shared prompt builder** — `src/ai/prompt.ts`: `buildPrompt()` with context hint (duration, weekday/weekend, time of day); targets `MEETING | ONE_ON_ONE | MEMO` classification; field names aligned to `keyTopics`
+- **Shared prompt builder** — `src/ai/prompt.ts`: `buildPrompt()` with context hint (duration, weekday/weekend, time of day); classifies into `MEETING | ONE_ON_ONE | MEMO | JOURNAL`; field names aligned to `keyTopics`
 - **Claude summarization** — `src/ai/providers/claude.ts`: `claude-sonnet-4-6`, 3000 max tokens, uses `requestUrl` (CORS fix)
 - **GPT-4o Mini summarization** — `src/ai/providers/openai.ts`: `gpt-4o-mini`, JSON mode (`response_format: json_object`), uses `requestUrl`
 - **Note writer** — `src/notes/writer.ts`: sanitizes title for filename, creates output folder if missing, file collision handling (overwrite existing on same date + title)
-- **Markdown template** — `src/notes/template.ts`: YAML frontmatter (title, date, type, duration, source, tags), audio embed (`![[path]]`), Summary, prose content paragraphs, Key Highlights, Decisions, Action Items (as `- [ ]` checkboxes with owner + context), collapsible Transcript `<details>`
+- **Markdown template** — `src/notes/template.ts`: YAML frontmatter (`igggy_id`, title, date, type, `duration_sec`, `audio:`, `source: igggy`, tags), audio embed (`![[path]]`), Summary, prose content paragraphs, Key Highlights, Decisions, Action Items (as `- [ ]` checkboxes with owner + context), collapsible Transcript `<details>`
 - **Settings** — `src/settings.ts` + `src/settings-tab.ts`: provider dropdowns (OpenAI/Deepgram, OpenAI/Anthropic), API key fields, output folder, embed audio toggle; saved via `loadData()/saveData()`
 
 ### Entry Points & UX

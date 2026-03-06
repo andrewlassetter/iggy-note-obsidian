@@ -38,6 +38,7 @@ export async function writeNote(
   const templateData: NoteTemplateData = {
     noteContent,
     date,
+    igggyId: crypto.randomUUID(),
     transcript,
     durationSec,
     audioPath,

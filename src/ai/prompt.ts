@@ -40,11 +40,12 @@ ${contextHint}Identify the recording type:
 - "MEETING" — group discussion or call with 3 or more people
 - "ONE_ON_ONE" — conversation between exactly two people (1:1 meeting, interview, pair call)
 - "MEMO" — one person capturing their own thoughts, ideas, to-dos, or reflections
+- "JOURNAL" — personal journal entry: reflective, introspective, or diary-style
 
 Return a JSON object with ALL of these fields:
 
 {
-  "noteType": "MEETING" | "ONE_ON_ONE" | "MEMO",
+  "noteType": "MEETING" | "ONE_ON_ONE" | "MEMO" | "JOURNAL",
 
   "title": "A specific, descriptive title (5–8 words). Useful months from now — not 'Team meeting' but 'Q3 launch timeline and owner assignments'.",
 
