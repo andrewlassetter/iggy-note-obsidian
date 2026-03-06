@@ -36,6 +36,7 @@ _Last updated: 2026-03-06_
 - **`styles.css`** — stub (no custom styles in v0.1.0)
 - **`README.md`** — installation, configuration, usage, privacy disclosure
 - **Frontmatter schema** — `src/notes/template.ts` + `writer.ts`: `igggy_id` (UUID via `crypto.randomUUID()`), `duration_sec` (raw number), `audio:` (path), `source: igggy` (always); aligned with `@igggy/core` canonical schema
+- **Brand rename (iggy → igggy)** — all TypeScript identifiers and CSS classes updated: `IggyNotePlugin` → `IgggyPlugin`, `IggyNoteSettings` → `IgggySettings`, `IggyNoteSettingsTab` → `IgggySettingsTab`, CSS class `iggy-note-file-path` → `igggy-file-path`; `data.json` added to `.gitignore` (runtime store may contain API keys)
 
 ### Supported audio formats
 `m4a`, `mp3`, `wav`, `webm`, `ogg`, `flac`, `aac`, `mp4`
