@@ -11,6 +11,14 @@ export interface WriteNoteOptions {
   embedAudio: boolean
 }
 
+export interface FinalizeOptions {
+  date: string
+  transcript?: string
+  durationSec?: number
+  audioPath?: string
+  embedAudio: boolean
+}
+
 export async function writeNote(
   app: App,
   noteContent: NoteContent,
@@ -54,4 +62,167 @@ export async function writeNote(
   }
 
   return app.vault.create(filePath, markdown)
+}
+
+// ── Inline Processing Feedback ────────────────────────────────────────────────
+
+/**
+ * Creates a placeholder note file immediately when processing begins.
+ * Uses the audio file's basename as the initial title — the real AI-generated
+ * title is applied later by finalizePlaceholder().
+ */
+export async function createPlaceholder(
+  app: App,
+  audioFile: TFile,
+  outputFolder: string
+): Promise<TFile> {
+  const igggyId = crypto.randomUUID()
+  const date = new Date().toISOString().slice(0, 10)
+
+  const safeTitle = audioFile.basename
+    .replace(/[/\\:*?"<>|#^[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100)
+
+  const folderPath = normalizePath(outputFolder)
+  const folder = app.vault.getAbstractFileByPath(folderPath)
+  if (!folder) {
+    await app.vault.createFolder(folderPath)
+  }
+
+  // Resolve path with collision handling
+  let filePath = normalizePath(`${folderPath}/${date} - ${safeTitle}.md`)
+  let counter = 2
+  while (app.vault.getAbstractFileByPath(filePath) instanceof TFile) {
+    filePath = normalizePath(`${folderPath}/${date} - ${safeTitle} ${counter}.md`)
+    counter++
+  }
+
+  const placeholderMarkdown = [
+    '---',
+    `igggy_id: ${igggyId}`,
+    'title: "Processing\u2026"',
+    `date: ${date}`,
+    'source: igggy',
+    '---',
+    '',
+    '## Processing audio\u2026',
+    '',
+    '> Igggy is working on this note. This will update automatically.',
+    '',
+    '- \uD83D\uDCC2 Reading audio\u2026',
+    '',
+  ].join('\n')
+
+  return app.vault.create(filePath, placeholderMarkdown)
+}
+
+/**
+ * Updates the placeholder note body with the current pipeline stage.
+ * Preserves the frontmatter and replaces the body.
+ */
+export async function updatePlaceholderStage(
+  app: App,
+  file: TFile,
+  stageLines: string[]
+): Promise<void> {
+  const currentContent = await app.vault.read(file)
+  const frontmatterMatch = currentContent.match(/^---\n[\s\S]*?\n---/)
+  const frontmatter = frontmatterMatch ? frontmatterMatch[0] : ''
+
+  const body = [
+    '',
+    '## Processing audio\u2026',
+    '',
+    '> Igggy is working on this note. This will update automatically.',
+    '',
+    stageLines.map((line) => `- ${line}`).join('\n'),
+    '',
+  ].join('\n')
+
+  await app.vault.modify(file, frontmatter + body)
+}
+
+/**
+ * Sets the placeholder note to an error state when the pipeline fails.
+ * The note remains in the vault so the user can see what went wrong.
+ */
+export async function setPlaceholderError(
+  app: App,
+  file: TFile,
+  stageName: string,
+  errorMessage: string
+): Promise<void> {
+  const currentContent = await app.vault.read(file)
+  const frontmatterMatch = currentContent.match(/^---\n[\s\S]*?\n---/)
+  const frontmatter = frontmatterMatch ? frontmatterMatch[0] : ''
+
+  const body = [
+    '',
+    '## Error',
+    '',
+    `Igggy encountered an error during ${stageName}.`,
+    '',
+    `**What happened**: ${errorMessage}`,
+    '',
+    '**What to try**:',
+    '- Check that your API keys are correct in Igggy settings',
+    '- Confirm the audio file is a supported format',
+    '- Try processing the file again',
+    '',
+    '_The audio file has not been modified._',
+    '',
+  ].join('\n')
+
+  await app.vault.modify(file, frontmatter + body)
+}
+
+/**
+ * Replaces the placeholder content with the fully generated note and renames
+ * the file to the AI-generated title. After this call, Igggy never modifies
+ * this file again — the write-once invariant applies to the completed note.
+ */
+export async function finalizePlaceholder(
+  app: App,
+  file: TFile,
+  noteContent: NoteContent,
+  options: FinalizeOptions
+): Promise<void> {
+  const { date, transcript, durationSec, audioPath, embedAudio } = options
+
+  // Reuse the igggy_id generated during createPlaceholder
+  const currentContent = await app.vault.read(file)
+  const idMatch = currentContent.match(/^igggy_id: (.+)$/m)
+  const igggyId = idMatch?.[1]?.trim() ?? crypto.randomUUID()
+
+  const templateData: NoteTemplateData = {
+    noteContent,
+    date,
+    igggyId,
+    transcript,
+    durationSec,
+    audioPath,
+    embedAudio,
+  }
+  const finalMarkdown = generateMarkdown(templateData)
+
+  await app.vault.modify(file, finalMarkdown)
+
+  // Rename to the real AI-generated title if it differs from the placeholder name
+  const safeTitle = noteContent.title
+    .replace(/[/\\:*?"<>|#^[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100)
+
+  const folderPath = file.parent?.path ?? ''
+  const targetFilename = `${date} - ${safeTitle}.md`
+  const targetPath = normalizePath(
+    folderPath ? `${folderPath}/${targetFilename}` : targetFilename
+  )
+
+  if (file.path !== targetPath && !app.vault.getAbstractFileByPath(targetPath)) {
+    await app.vault.rename(file, targetPath)
+  }
 }

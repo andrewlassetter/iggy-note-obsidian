@@ -1,6 +1,6 @@
 # Igggy Obsidian Plugin — Project Status
 
-_Last updated: 2026-03-06_
+_Last updated: 2026-03-07_
 
 ---
 
@@ -8,13 +8,13 @@ _Last updated: 2026-03-06_
 
 ### Core Pipeline (end-to-end working)
 - **Plugin entry point** — `src/main.ts`: loads settings, registers ribbon icon (`audio-waveform`), registers commands, registers settings tab
-- **Audio pre-processor** — `src/audio/preprocessor.ts`: Web Audio API + lamejs; skips files under 10MB, decodes to PCM, mixes to mono, downsamples to 16kHz, encodes to 32kbps MP3; ~57MB → ~14MB for 1-hour meetings
+- **Audio pre-processor** — `src/audio/preprocessor.ts`: Web Audio API + `@breezystack/lamejs`; skips files under 10MB, decodes to PCM, mixes to mono, downsamples to 16kHz, encodes to 32kbps MP3; ~57MB → ~14MB for 1-hour meetings
 - **OpenAI Whisper transcription** — `src/audio/providers/openai.ts`: `whisper-1`, `verbose_json` response format, returns transcript + durationSec; uses `fetch` (FormData/multipart — documented intentional exception to `requestUrl`)
 - **Deepgram Nova-3 transcription** — `src/audio/providers/deepgram.ts`: `nova-3` with `smart_format`, `diarize`, `paragraphs`; multi-speaker detection with `[Speaker N]:` prefixing; uses `requestUrl` with raw ArrayBuffer body
 - **Shared prompt builder** — `src/ai/prompt.ts`: `buildPrompt()` with context hint (duration, weekday/weekend, time of day); classifies into `MEETING | ONE_ON_ONE | MEMO | JOURNAL`; field names aligned to `keyTopics`
 - **Claude summarization** — `src/ai/providers/claude.ts`: `claude-sonnet-4-6`, 3000 max tokens, uses `requestUrl` (CORS fix)
 - **GPT-4o Mini summarization** — `src/ai/providers/openai.ts`: `gpt-4o-mini`, JSON mode (`response_format: json_object`), uses `requestUrl`
-- **Note writer** — `src/notes/writer.ts`: sanitizes title for filename, creates output folder if missing, file collision handling (overwrite existing on same date + title)
+- **Note writer** — `src/notes/writer.ts`: sanitizes title for filename, creates output folder if missing, file collision handling (counter suffix on placeholder name)
 - **Markdown template** — `src/notes/template.ts`: YAML frontmatter (`igggy_id`, title, date, type, `duration_sec`, `audio:`, `source: igggy`, tags), audio embed (`![[path]]`), Summary, prose content paragraphs, Key Highlights, Decisions, Tasks (as `- [ ]` checkboxes with owner + context), collapsible Transcript `<details>`
 - **Settings** — `src/settings.ts` + `src/settings-tab.ts`: provider dropdowns (OpenAI/Deepgram, OpenAI/Anthropic), API key fields, output folder, embed audio toggle; saved via `loadData()/saveData()`
 
@@ -24,13 +24,13 @@ _Last updated: 2026-03-06_
 - **Command: "Process active audio file"** — `checkCallback` only available when active file is an audio format
 - **File explorer context menu** — "Process with Igggy" (mic icon) on audio files only
 - **Editor context menu** — "Process with Igggy" when active file is an audio format
-- **Progress notices** — `Notice` at each pipeline step: reading, pre-processing (with before/after size), transcribing, generating, writing
-- **Error handling** — step-contexted error messages; `friendlyError()` maps 401, 429, 413, network, decode errors to plain-English notices (10s timeout)
-- **API key validation** — guards at pipeline start; surfaces which key is missing before any processing begins
+- **Inline processing feedback (Phase 1)** — placeholder note created immediately at pipeline start and opened in active pane; body updates at each stage (reading ✓ → compressed X→Y MB ✓ → transcript ready ✓ → generating…); final content replaces placeholder on completion; file renamed from audio-based title to AI-generated title. All `Notice` toast calls removed from pipeline — the note is the status surface. Error state written to placeholder if any stage fails (friendly message + recovery steps).
+- **Error handling** — step-contexted `setPlaceholderError()` writes a friendly error body to the placeholder note; `friendlyError()` maps 401, 429, 413, network, decode errors to plain English
+- **API key validation** — guards at pipeline start with `Notice`; surfaces which key is missing before placeholder is created
 
 ### Build & Tooling
 - **TypeScript build** — `esbuild.config.mjs` (standard Obsidian scaffold), `tsconfig.json`
-- **lamejs type stub** — `src/types/lamejs.d.ts`
+- **`@breezystack/lamejs` type stub** — `src/types/lamejs.d.ts` declares `Mp3Encoder` for `@breezystack/lamejs`
 - **`manifest.json`** — plugin ID `igggy`, name `Igggy`, v0.1.0, `isDesktopOnly: true`, `fundingUrl`
 - **`LICENSE`** — MIT
 - **`styles.css`** — stub (no custom styles in v0.1.0)
@@ -53,17 +53,19 @@ _(nothing currently active)_
 
 ### Mandatory Before Marketplace Submission
 - [ ] **E2E validation** — test all 6 scenarios in a live Obsidian vault (see below)
-- [x] **`npm run build`** — confirmed clean, zero TS errors (2026-03-06)
+- [x] **`npm run build`** — confirmed clean, zero TS errors (2026-03-07)
 - [ ] **Create GitHub release `0.1.0`** — tag must match manifest exactly (no `v` prefix); upload 3 assets individually: `manifest.json`, `main.js`, `styles.css`
 - [ ] **Submit PR to obsidianmd/obsidian-releases** — add entry to `community-plugins.json`; respond to ObsidianReviewBot within 6 hours if flagged
 
 ### E2E Validation Scenarios
 - [ ] OpenAI-only path: one OpenAI key → Whisper transcription + GPT-4o Mini note
 - [ ] Deepgram + Claude path: verify speaker diarization appears in transcript + propagates to note
-- [ ] File >10MB: confirm preprocessor fires; compression notice shows before/after sizes
+- [ ] File >10MB: confirm preprocessor fires; inline note shows "Compressed: X MB → Y MB ✓" stage line
 - [ ] "Process active file" command with an audio file focused in the editor
-- [ ] Generated note structure: frontmatter fields, section headers, checkbox format, transcript collapsible
-- [ ] File collision: process same file twice — confirm note is overwritten (not duplicated)
+- [ ] Generated note structure: frontmatter fields (`igggy_id`, `date`, `type`, `duration_sec`, `audio`, `source: igggy`), section headers, checkbox format, transcript collapsible; confirm file is renamed to AI-generated title
+- [ ] Processing UX: placeholder note appears immediately, opens in active pane, stage lines update during processing, no toast notifications
+- [ ] Error state: force an error (invalid key) → confirm placeholder shows error body with friendly message and recovery steps
+- [ ] File collision: process same file twice → two separate notes created with unique names; first note untouched
 
 ### PR Submission Details
 - Fork `obsidianmd/obsidian-releases`, add to `community-plugins.json`:

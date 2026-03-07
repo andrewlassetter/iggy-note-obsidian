@@ -5,7 +5,12 @@ import { OpenAIWhisperProvider } from './audio/providers/openai'
 import { DeepgramProvider } from './audio/providers/deepgram'
 import { ClaudeProvider } from './ai/providers/claude'
 import { OpenAIGPT4oProvider } from './ai/providers/openai'
-import { writeNote } from './notes/writer'
+import {
+  createPlaceholder,
+  updatePlaceholderStage,
+  setPlaceholderError,
+  finalizePlaceholder,
+} from './notes/writer'
 
 const AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm', 'ogg', 'flac', 'aac', 'mp4'])
 
@@ -14,7 +19,7 @@ const AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm', 'ogg', 'flac', 'a
 async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void> {
   const { settings, app } = plugin
 
-  // Validate required keys before starting
+  // Validate required keys before starting — keep Notice for pre-pipeline failures
   if (settings.transcriptionProvider === 'openai' && !settings.openaiKey) {
     new Notice('Igggy: OpenAI API key required. Open plugin settings to add it.', 6000)
     return
@@ -32,20 +37,45 @@ async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void>
     return
   }
 
-  let step = 'reading file'
+  // Create placeholder note immediately and open it in the active pane.
+  // If this fails (e.g. vault write error), fall back to a Notice.
+  let placeholderFile: TFile
   try {
-    new Notice(`Igggy: Reading "${file.name}"…`)
+    placeholderFile = await createPlaceholder(app, file, settings.outputFolder)
+    await app.workspace.getLeaf(false).openFile(placeholderFile)
+  } catch (err) {
+    console.error('[Igggy] Failed to create placeholder note:', err)
+    new Notice('Igggy: Failed to create note file. Check your output folder setting.', 6000)
+    return
+  }
+
+  const date = new Date().toISOString().slice(0, 10)
+  let step = 'reading file'
+  // audioLine is built after preprocessing and reused in subsequent stage updates
+  let audioLine = '\uD83D\uDD0A Audio ready \u2713'
+
+  try {
+    // ── Read ────────────────────────────────────────────────────────────────
     const rawBuffer = await app.vault.readBinary(file)
 
+    // ── Pre-process ─────────────────────────────────────────────────────────
     step = 'pre-processing audio'
-    new Notice('Igggy: Pre-processing audio…')
+    await updatePlaceholderStage(app, placeholderFile, [
+      '\uD83D\uDCC2 Reading audio \u2713',
+      '\uD83D\uDD0A Pre-processing audio\u2026',
+    ])
     const processed = await preprocessAudio(rawBuffer, file.name)
-    if (processed.wasCompressed) {
-      new Notice(`Igggy: Compressed ${formatBytes(rawBuffer.byteLength)} → ${formatBytes(processed.buffer.byteLength)}`)
-    }
+    audioLine = processed.wasCompressed
+      ? `\uD83D\uDD0A Compressed: ${formatBytes(rawBuffer.byteLength)} \u2192 ${formatBytes(processed.buffer.byteLength)} \u2713`
+      : '\uD83D\uDD0A Audio ready \u2713'
 
+    // ── Transcribe ──────────────────────────────────────────────────────────
     step = 'transcribing'
-    new Notice('Igggy: Transcribing (this may take up to a minute for longer recordings)…')
+    await updatePlaceholderStage(app, placeholderFile, [
+      '\uD83D\uDCC2 Reading audio \u2713',
+      audioLine,
+      '\uD83C\uDF99\uFE0F Transcribing\u2026',
+    ])
     const transcriptionProvider =
       settings.transcriptionProvider === 'deepgram'
         ? new DeepgramProvider(settings.deepgramKey)
@@ -56,8 +86,14 @@ async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void>
       processed.filename
     )
 
+    // ── Summarize ───────────────────────────────────────────────────────────
     step = 'generating note'
-    new Notice('Igggy: Generating structured note…')
+    await updatePlaceholderStage(app, placeholderFile, [
+      '\uD83D\uDCC2 Reading audio \u2713',
+      audioLine,
+      '\uD83C\uDF99\uFE0F Transcript ready \u2713',
+      '\u2728 Generating note\u2026',
+    ])
     const summarizationProvider =
       settings.summarizationProvider === 'anthropic'
         ? new ClaudeProvider(settings.anthropicKey)
@@ -69,27 +105,20 @@ async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void>
     }
     const noteContent = await summarizationProvider.summarize(transcript, meta)
 
+    // ── Finalize ────────────────────────────────────────────────────────────
     step = 'writing note'
-    const date = new Date().toISOString().slice(0, 10)
-    const createdFile = await writeNote(app, noteContent, {
-      outputFolder: settings.outputFolder,
+    await finalizePlaceholder(app, placeholderFile, noteContent, {
       date,
       transcript,
       durationSec,
       audioPath: settings.embedAudio ? file.path : undefined,
       embedAudio: settings.embedAudio,
     })
-
-    new Notice(`Igggy: ✓ Created "${createdFile.name}"`, 6000)
-
-    // Open the generated note
-    const leaf = app.workspace.getLeaf(false)
-    await leaf.openFile(createdFile)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const friendlyMessage = friendlyError(message, step)
     console.error(`[Igggy] Error during "${step}":`, err)
-    new Notice(`Igggy: Failed during ${step} — ${friendlyMessage}`, 10000)
+    await setPlaceholderError(app, placeholderFile, step, friendlyMessage)
   }
 }
 
@@ -100,7 +129,7 @@ class AudioFileSuggestModal extends SuggestModal<TFile> {
     private plugin: IgggyPlugin
   ) {
     super(plugin.app)
-    this.setPlaceholder('Type to filter audio files…')
+    this.setPlaceholder('Type to filter audio files\u2026')
   }
 
   getSuggestions(query: string): TFile[] {
@@ -181,7 +210,7 @@ export function registerCommands(plugin: IgggyPlugin): void {
   // Pick any audio file from the vault via modal
   plugin.addCommand({
     id: 'process-audio-file',
-    name: 'Process audio file…',
+    name: 'Process audio file\u2026',
     callback: () => {
       new AudioFileSuggestModal(plugin).open()
     },
@@ -198,21 +227,21 @@ function friendlyError(message: string, step: string): string {
   const lower = message.toLowerCase()
 
   if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('invalid_api_key')) {
-    return 'invalid API key — check your key in plugin settings'
+    return 'invalid API key \u2014 check your key in plugin settings'
   }
   if (lower.includes('429') || lower.includes('rate limit') || lower.includes('quota')) {
-    return 'API rate limit or quota exceeded — try again shortly'
+    return 'API rate limit or quota exceeded \u2014 try again shortly'
   }
   if (lower.includes('413') || lower.includes('too large') || lower.includes('file size')) {
-    return 'audio file is too large for the API — try a shorter recording'
+    return 'audio file is too large for the API \u2014 try a shorter recording'
   }
   if (lower.includes('fetch') || lower.includes('network') || lower.includes('econnrefused') || lower.includes('enotfound')) {
     return step === 'reading file'
-      ? 'could not read file — ensure it is fully synced and not stored only in iCloud'
-      : 'network request failed — check your internet connection'
+      ? 'could not read file \u2014 ensure it is fully synced and not stored only in iCloud'
+      : 'network request failed \u2014 check your internet connection'
   }
   if (lower.includes('could not decode') || lower.includes('decodeaudiodata') || lower.includes('dom exception')) {
-    return 'could not decode audio — the file format may not be supported'
+    return 'could not decode audio \u2014 the file format may not be supported'
   }
 
   return message
