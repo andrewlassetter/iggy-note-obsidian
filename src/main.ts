@@ -1,21 +1,92 @@
-import { Plugin } from 'obsidian'
+import { Notice, Plugin, TFile } from 'obsidian'
 import { type IgggySettings, DEFAULT_SETTINGS } from './settings'
 import { IgggySettingsTab } from './settings-tab'
-import { registerCommands, registerMenus, openAudioFilePicker } from './commands'
+import {
+  registerCommands,
+  registerMenus,
+  openAudioFilePicker,
+  validateKeys,
+  runProcessingPipeline,
+} from './commands'
+import { RecordingSession } from './recording/session'
+import { renderWaveform } from './ui/waveform'
+import {
+  createRecordingPlaceholder,
+  setRecordingState,
+  transitionToProcessing,
+} from './notes/writer'
 
 export default class IgggyPlugin extends Plugin {
   settings!: IgggySettings
 
+  // ── Recording state ──────────────────────────────────────────────────────────
+  activeRecording: RecordingSession | null = null
+  recordingPlaceholder: TFile | null = null
+  private statusBarEl: HTMLElement | null = null
+  private statusBarInterval: ReturnType<typeof setInterval> | null = null
+
   async onload(): Promise<void> {
     await this.loadSettings()
-    this.addRibbonIcon('audio-waveform', 'Process audio with Igggy', () => openAudioFilePicker(this))
+
+    // ── Ribbon icon ─────────────────────────────────────────────────────────────
+    this.addRibbonIcon('audio-waveform', 'Process audio with Igggy', () =>
+      openAudioFilePicker(this)
+    )
+
+    // ── Waveform code block processor ────────────────────────────────────────────
+    // Renders an animated waveform inside `igggy-status` code blocks.
+    // Obsidian calls this processor whenever the block's content changes,
+    // so pause/resume state transitions happen automatically via vault.modify().
+    this.registerMarkdownCodeBlockProcessor('igggy-status', (source, el, ctx) => {
+      const state = source.trim() as 'recording' | 'paused' | 'processing'
+      renderWaveform(state, el, ctx, this)
+    })
+
+    // ── Status bar (hidden until recording starts) ────────────────────────────────
+    this.statusBarEl = this.addStatusBarItem()
+
+    // ── File processing commands ──────────────────────────────────────────────────
     registerCommands(this)
     registerMenus(this)
+
+    // ── Recording commands ────────────────────────────────────────────────────────
+    this.addCommand({
+      id: 'start-recording',
+      name: 'Start recording',
+      callback: () => { void this.startRecording() },
+    })
+
+    this.addCommand({
+      id: 'pause-resume-recording',
+      name: 'Pause / resume recording',
+      checkCallback: (checking: boolean) => {
+        if (!this.activeRecording) return false
+        if (!checking) this.pauseResumeRecording()
+        return true
+      },
+    })
+
+    this.addCommand({
+      id: 'stop-and-process',
+      name: 'Stop recording and process',
+      checkCallback: (checking: boolean) => {
+        if (!this.activeRecording) return false
+        if (!checking) { void this.stopAndProcess() }
+        return true
+      },
+    })
+
     this.addSettingTab(new IgggySettingsTab(this.app, this))
     console.log('[Igggy] Plugin loaded')
   }
 
   onunload(): void {
+    // Release microphone if the plugin is disabled mid-recording
+    if (this.activeRecording) {
+      void this.activeRecording.stop()
+      this.activeRecording = null
+    }
+    this.clearStatusBar()
     console.log('[Igggy] Plugin unloaded')
   }
 
@@ -26,4 +97,141 @@ export default class IgggyPlugin extends Plugin {
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings)
   }
+
+  // ── Recording actions ─────────────────────────────────────────────────────────
+
+  private async startRecording(): Promise<void> {
+    if (this.activeRecording) {
+      new Notice('Igggy: A recording is already in progress.', 4000)
+      return
+    }
+
+    const keyError = validateKeys(this)
+    if (keyError) {
+      new Notice(keyError, 6000)
+      return
+    }
+
+    // Request microphone access — may throw NotAllowedError or NotFoundError
+    let session: RecordingSession
+    try {
+      session = await RecordingSession.create()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('NotAllowedError') || message.includes('Permission denied')) {
+        new Notice('Igggy: Microphone access denied. Allow microphone access and try again.', 6000)
+      } else if (message.includes('NotFoundError') || message.includes('not found')) {
+        new Notice('Igggy: No microphone found. Connect a microphone and try again.', 6000)
+      } else {
+        new Notice(`Igggy: Could not start recording \u2014 ${message}`, 6000)
+      }
+      return
+    }
+
+    // Create placeholder note and open it before recording starts
+    let placeholderFile: TFile
+    try {
+      placeholderFile = await createRecordingPlaceholder(this.app, this.settings.outputFolder)
+      await this.app.workspace.getLeaf(false).openFile(placeholderFile)
+    } catch (err) {
+      console.error('[Igggy] Failed to create recording placeholder:', err)
+      new Notice('Igggy: Failed to create note file. Check your output folder setting.', 6000)
+      await session.stop()
+      return
+    }
+
+    this.activeRecording = session
+    this.recordingPlaceholder = placeholderFile
+    session.start()
+
+    // Start status bar timer
+    this.statusBarEl?.setText('\uD83C\uDF99\uFE0F 0:00')
+    this.statusBarInterval = setInterval(() => {
+      const elapsed = this.activeRecording?.getElapsedSec() ?? 0
+      this.statusBarEl?.setText(`\uD83C\uDF99\uFE0F ${formatElapsed(elapsed)}`)
+    }, 500)
+  }
+
+  private pauseResumeRecording(): void {
+    if (!this.activeRecording || !this.recordingPlaceholder) return
+
+    const state = this.activeRecording.getState()
+
+    if (state === 'recording') {
+      this.activeRecording.pause()
+      void setRecordingState(this.app, this.recordingPlaceholder, 'paused')
+      // Show frozen time with pause icon; stop updating while paused
+      const elapsed = this.activeRecording.getElapsedSec()
+      this.statusBarEl?.setText(`\u23F8 ${formatElapsed(elapsed)}`)
+      this.clearStatusBarInterval()
+    } else if (state === 'paused') {
+      this.activeRecording.resume()
+      void setRecordingState(this.app, this.recordingPlaceholder, 'recording')
+      // Resume live timer
+      this.statusBarEl?.setText(`\uD83C\uDF99\uFE0F ${formatElapsed(this.activeRecording.getElapsedSec())}`)
+      this.statusBarInterval = setInterval(() => {
+        const elapsed = this.activeRecording?.getElapsedSec() ?? 0
+        this.statusBarEl?.setText(`\uD83C\uDF99\uFE0F ${formatElapsed(elapsed)}`)
+      }, 500)
+    }
+  }
+
+  private async stopAndProcess(): Promise<void> {
+    if (!this.activeRecording || !this.recordingPlaceholder) return
+
+    const session = this.activeRecording
+    const file = this.recordingPlaceholder
+
+    // Clear state immediately so checkCallbacks disable the commands
+    this.activeRecording = null
+    this.recordingPlaceholder = null
+    this.clearStatusBar()
+
+    // Stop recording and release the microphone
+    const blob = await session.stop()
+
+    // Replace the igggy-status waveform block with the standard processing format
+    await transitionToProcessing(this.app, file)
+
+    const buffer = await blob.arrayBuffer()
+    const ext = RecordingSession.getExtension(blob.type)
+    const filename = `igggy-recording-${Date.now()}.${ext}`
+    const date = new Date().toISOString().slice(0, 10)
+    const capturedAt = new Date()
+
+    await runProcessingPipeline(
+      this,
+      file,
+      buffer,
+      filename,
+      date,
+      capturedAt,
+      '\uD83C\uDF99\uFE0F Recording ready \u2713',
+      undefined,
+      false
+    )
+  }
+
+  // ── Status bar helpers ────────────────────────────────────────────────────────
+
+  private clearStatusBarInterval(): void {
+    if (this.statusBarInterval !== null) {
+      clearInterval(this.statusBarInterval)
+      this.statusBarInterval = null
+    }
+  }
+
+  private clearStatusBar(): void {
+    this.clearStatusBarInterval()
+    this.statusBarEl?.setText('')
+  }
+}
+
+// ── Module-level helpers ──────────────────────────────────────────────────────
+
+function formatElapsed(totalSec: number): string {
+  const sec = Math.floor(totalSec)
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
 }

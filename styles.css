@@ -1,2 +1,75 @@
 /* Igggy Plugin Styles */
-/* No custom styles in v0.1.0 — all UI uses Obsidian's built-in components and CSS variables */
+
+/* ── Waveform block (igggy-status code block processor) ──────────────────────────
+   Three states: recording (canvas), paused (flat CSS bars), processing (sine wave)
+   ──────────────────────────────────────────────────────────────────────────────── */
+
+.igggy-waveform {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0 8px;
+  user-select: none;
+}
+
+/* ── Canvas (recording state) ──────────────────────────────────────────────── */
+
+.igggy-canvas {
+  display: block;
+  border-radius: 4px;
+}
+
+/* ── CSS bars (paused + processing states) ─────────────────────────────────── */
+
+.igggy-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+}
+
+.igggy-bars .bar {
+  flex: 0 0 3px;
+  border-radius: 99px;
+  background: var(--interactive-accent);
+  height: 3px;
+  min-height: 3px;
+}
+
+/* ── Processing: smooth rolling sine wave ──────────────────────────────────── */
+
+@keyframes igggy-wave {
+  0%, 100% { height: 3px; }
+  50%       { height: 26px; }
+}
+
+.igggy-waveform.processing .igggy-bars .bar {
+  animation: igggy-wave 1.4s ease-in-out infinite;
+  animation-delay: var(--wave-delay, 0s);
+}
+
+/* ── Paused: flat and dimmed ───────────────────────────────────────────────── */
+
+.igggy-waveform.paused .igggy-bars .bar {
+  height: 2px;
+  animation: none;
+  opacity: 0.4;
+}
+
+/* ── Footer: timer + label ─────────────────────────────────────────────────── */
+
+.igggy-waveform-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.igggy-timer {
+  font-variant-numeric: tabular-nums;
+}
+
+.igggy-waveform-label {
+  opacity: 0.8;
+}

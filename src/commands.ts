@@ -14,65 +14,68 @@ import {
 
 const AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm', 'ogg', 'flac', 'aac', 'mp4'])
 
-// ── Pipeline ──────────────────────────────────────────────────────────────────
+// ── Key validation ────────────────────────────────────────────────────────────
 
-async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void> {
-  const { settings, app } = plugin
-
-  // Validate required keys before starting — keep Notice for pre-pipeline failures
+/**
+ * Checks that all API keys required by the current provider selections are present.
+ * Returns a user-facing error string if a key is missing, or null if everything is valid.
+ */
+export function validateKeys(plugin: IgggyPlugin): string | null {
+  const { settings } = plugin
   if (settings.transcriptionProvider === 'openai' && !settings.openaiKey) {
-    new Notice('Igggy: OpenAI API key required. Open plugin settings to add it.', 6000)
-    return
+    return 'Igggy: OpenAI API key required. Open plugin settings to add it.'
   }
   if (settings.transcriptionProvider === 'deepgram' && !settings.deepgramKey) {
-    new Notice('Igggy: Deepgram API key required. Open plugin settings to add it.', 6000)
-    return
+    return 'Igggy: Deepgram API key required. Open plugin settings to add it.'
   }
   if (settings.summarizationProvider === 'anthropic' && !settings.anthropicKey) {
-    new Notice('Igggy: Anthropic API key required. Open plugin settings to add it.', 6000)
-    return
+    return 'Igggy: Anthropic API key required. Open plugin settings to add it.'
   }
   if (settings.summarizationProvider === 'openai' && !settings.openaiKey) {
-    new Notice('Igggy: OpenAI API key required. Open plugin settings to add it.', 6000)
-    return
+    return 'Igggy: OpenAI API key required. Open plugin settings to add it.'
   }
+  return null
+}
 
-  // Create placeholder note immediately and open it in the active pane.
-  // If this fails (e.g. vault write error), fall back to a Notice.
-  let placeholderFile: TFile
+// ── Shared processing pipeline ────────────────────────────────────────────────
+
+/**
+ * Runs the full processing pipeline: preprocess → transcribe → summarize → finalize.
+ * Assumes the placeholder note is already created and open in the editor.
+ *
+ * @param firstStageLine - Initial ✓ line shown above the current step.
+ *   File pipeline:      '\uD83D\uDCC2 Reading audio \u2713'       (📂 Reading audio ✓)
+ *   Recording pipeline: '\uD83C\uDF99\uFE0F Recording ready \u2713' (🎙️ Recording ready ✓)
+ */
+export async function runProcessingPipeline(
+  plugin: IgggyPlugin,
+  placeholderFile: TFile,
+  rawBuffer: ArrayBuffer,
+  filename: string,
+  date: string,
+  capturedAt: Date,
+  firstStageLine: string,
+  audioPath?: string,
+  embedAudio = false
+): Promise<void> {
+  const { app, settings } = plugin
+  let step = 'pre-processing audio'
+
   try {
-    placeholderFile = await createPlaceholder(app, file, settings.outputFolder)
-    await app.workspace.getLeaf(false).openFile(placeholderFile)
-  } catch (err) {
-    console.error('[Igggy] Failed to create placeholder note:', err)
-    new Notice('Igggy: Failed to create note file. Check your output folder setting.', 6000)
-    return
-  }
-
-  const date = new Date().toISOString().slice(0, 10)
-  let step = 'reading file'
-  // audioLine is built after preprocessing and reused in subsequent stage updates
-  let audioLine = '\uD83D\uDD0A Audio ready \u2713'
-
-  try {
-    // ── Read ────────────────────────────────────────────────────────────────
-    const rawBuffer = await app.vault.readBinary(file)
-
-    // ── Pre-process ─────────────────────────────────────────────────────────
-    step = 'pre-processing audio'
+    // ── Pre-process ──────────────────────────────────────────────────────────
     await updatePlaceholderStage(app, placeholderFile, [
-      '\uD83D\uDCC2 Reading audio \u2713',
+      firstStageLine,
       '\uD83D\uDD0A Pre-processing audio\u2026',
     ])
-    const processed = await preprocessAudio(rawBuffer, file.name)
-    audioLine = processed.wasCompressed
+    const processed = await preprocessAudio(rawBuffer, filename)
+    const audioLine = processed.wasCompressed
       ? `\uD83D\uDD0A Compressed: ${formatBytes(rawBuffer.byteLength)} \u2192 ${formatBytes(processed.buffer.byteLength)} \u2713`
       : '\uD83D\uDD0A Audio ready \u2713'
 
-    // ── Transcribe ──────────────────────────────────────────────────────────
+    // ── Transcribe ───────────────────────────────────────────────────────────
     step = 'transcribing'
     await updatePlaceholderStage(app, placeholderFile, [
-      '\uD83D\uDCC2 Reading audio \u2713',
+      firstStageLine,
       audioLine,
       '\uD83C\uDF99\uFE0F Transcribing\u2026',
     ])
@@ -86,10 +89,10 @@ async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void>
       processed.filename
     )
 
-    // ── Summarize ───────────────────────────────────────────────────────────
+    // ── Summarize ────────────────────────────────────────────────────────────
     step = 'generating note'
     await updatePlaceholderStage(app, placeholderFile, [
-      '\uD83D\uDCC2 Reading audio \u2713',
+      firstStageLine,
       audioLine,
       '\uD83C\uDF99\uFE0F Transcript ready \u2713',
       '\u2728 Generating note\u2026',
@@ -99,35 +102,74 @@ async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void>
         ? new ClaudeProvider(settings.anthropicKey)
         : new OpenAIGPT4oProvider(settings.openaiKey)
 
-    const meta = {
-      durationSec,
-      capturedAt: new Date(file.stat.ctime),
-    }
-    const noteContent = await summarizationProvider.summarize(transcript, meta)
+    const noteContent = await summarizationProvider.summarize(transcript, { durationSec, capturedAt })
 
-    // ── Finalize ────────────────────────────────────────────────────────────
+    // ── Finalize ─────────────────────────────────────────────────────────────
     step = 'writing note'
     await finalizePlaceholder(app, placeholderFile, noteContent, {
       date,
       transcript,
       durationSec,
-      audioPath: settings.embedAudio ? file.path : undefined,
-      embedAudio: settings.embedAudio,
+      audioPath,
+      embedAudio,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    const friendlyMessage = friendlyError(message, step)
     console.error(`[Igggy] Error during "${step}":`, err)
-    await setPlaceholderError(app, placeholderFile, step, friendlyMessage)
+    await setPlaceholderError(app, placeholderFile, step, friendlyError(message, step))
   }
+}
+
+// ── File pipeline ─────────────────────────────────────────────────────────────
+
+async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void> {
+  const { settings, app } = plugin
+
+  const keyError = validateKeys(plugin)
+  if (keyError) {
+    new Notice(keyError, 6000)
+    return
+  }
+
+  let placeholderFile: TFile
+  try {
+    placeholderFile = await createPlaceholder(app, file, settings.outputFolder)
+    await app.workspace.getLeaf(false).openFile(placeholderFile)
+  } catch (err) {
+    console.error('[Igggy] Failed to create placeholder note:', err)
+    new Notice('Igggy: Failed to create note file. Check your output folder setting.', 6000)
+    return
+  }
+
+  const date = new Date().toISOString().slice(0, 10)
+
+  let rawBuffer: ArrayBuffer
+  try {
+    rawBuffer = await app.vault.readBinary(file)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[Igggy] Failed to read audio file:', err)
+    await setPlaceholderError(app, placeholderFile, 'reading file', friendlyError(message, 'reading file'))
+    return
+  }
+
+  await runProcessingPipeline(
+    plugin,
+    placeholderFile,
+    rawBuffer,
+    file.name,
+    date,
+    new Date(file.stat.ctime),
+    '\uD83D\uDCC2 Reading audio \u2713',
+    settings.embedAudio ? file.path : undefined,
+    settings.embedAudio
+  )
 }
 
 // ── File Picker Modal ─────────────────────────────────────────────────────────
 
 class AudioFileSuggestModal extends SuggestModal<TFile> {
-  constructor(
-    private plugin: IgggyPlugin
-  ) {
+  constructor(private plugin: IgggyPlugin) {
     super(plugin.app)
     this.setPlaceholder('Type to filter audio files\u2026')
   }

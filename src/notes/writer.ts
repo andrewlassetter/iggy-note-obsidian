@@ -178,6 +178,92 @@ export async function setPlaceholderError(
   await app.vault.modify(file, frontmatter + body)
 }
 
+// ── Recording Placeholder ─────────────────────────────────────────────────────
+
+/**
+ * Creates a recording placeholder note with an igggy-status code block.
+ * The block processor in main.ts renders this as an animated waveform.
+ */
+export async function createRecordingPlaceholder(
+  app: App,
+  outputFolder: string
+): Promise<TFile> {
+  const igggyId = crypto.randomUUID()
+  const date = new Date().toISOString().slice(0, 10)
+
+  const folderPath = normalizePath(outputFolder)
+  const folder = app.vault.getAbstractFileByPath(folderPath)
+  if (!folder) {
+    await app.vault.createFolder(folderPath)
+  }
+
+  // Collision-safe path
+  let filePath = normalizePath(`${folderPath}/${date} - Recording\u2026.md`)
+  let counter = 2
+  while (app.vault.getAbstractFileByPath(filePath) instanceof TFile) {
+    filePath = normalizePath(`${folderPath}/${date} - Recording\u2026 ${counter}.md`)
+    counter++
+  }
+
+  const markdown = [
+    '---',
+    `igggy_id: ${igggyId}`,
+    'title: "Recording\u2026"',
+    `date: ${date}`,
+    'source: igggy',
+    '---',
+    '',
+    '```igggy-status',
+    'recording',
+    '```',
+    '',
+  ].join('\n')
+
+  return app.vault.create(filePath, markdown)
+}
+
+/**
+ * Replaces the state string inside the igggy-status code block.
+ * Obsidian re-renders the block after the file is modified, triggering
+ * the code block processor with the new state.
+ */
+export async function setRecordingState(
+  app: App,
+  file: TFile,
+  state: 'recording' | 'paused' | 'processing'
+): Promise<void> {
+  const content = await app.vault.read(file)
+  const updated = content.replace(
+    /```igggy-status\n\w+\n```/,
+    `\`\`\`igggy-status\n${state}\n\`\`\``
+  )
+  await app.vault.modify(file, updated)
+}
+
+/**
+ * Transitions from recording placeholder → standard processing placeholder.
+ * Removes the igggy-status block and writes the initial processing stage lines.
+ * After this, all existing updatePlaceholderStage() calls work unchanged.
+ */
+export async function transitionToProcessing(app: App, file: TFile): Promise<void> {
+  const currentContent = await app.vault.read(file)
+  const frontmatterMatch = currentContent.match(/^---\n[\s\S]*?\n---/)
+  const frontmatter = frontmatterMatch ? frontmatterMatch[0] : ''
+
+  const body = [
+    '',
+    '## Processing audio\u2026',
+    '',
+    '> Igggy is working on this note. This will update automatically.',
+    '',
+    '- \uD83C\uDF99\uFE0F Recording ready \u2713',
+    '- \uD83D\uDCC2 Reading audio\u2026',
+    '',
+  ].join('\n')
+
+  await app.vault.modify(file, frontmatter + body)
+}
+
 /**
  * Replaces the placeholder content with the fully generated note and renames
  * the file to the AI-generated title. After this call, Igggy never modifies
