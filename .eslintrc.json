@@ -1,0 +1,6 @@
+{
+  "plugins": ["obsidianmd"],
+  "rules": {
+    "obsidianmd/ui/sentence-case": "warn"
+  }
+}

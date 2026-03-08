@@ -197,7 +197,7 @@ function renderFooter(
     const id = window.setInterval(() => {
       timerEl.textContent = formatSec(plugin.activeRecording?.getElapsedSec() ?? 0)
     }, 250)
-    timerComponent.setIntervalId(id as number)
+    timerComponent.setIntervalId(id)
   }
 
   const labelText =

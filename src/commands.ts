@@ -137,7 +137,7 @@ async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void>
     await app.workspace.getLeaf(false).openFile(placeholderFile)
   } catch (err) {
     console.error('[Igggy] Failed to create placeholder note:', err)
-    new Notice('Igggy: Failed to create note file. Check your output folder setting.', 6000)
+    new Notice('Failed to create note file — check your output folder setting.', 6000)
     return
   }
 
@@ -210,6 +210,7 @@ export function registerMenus(plugin: IgggyPlugin): void {
       if (!AUDIO_EXTENSIONS.has(file.extension.toLowerCase())) return
       menu.addItem((item) =>
         item
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setTitle('Process with Igggy')
           .setIcon('mic')
           .onClick(() => { void processAudioFile(plugin, file) })
@@ -225,6 +226,7 @@ export function registerMenus(plugin: IgggyPlugin): void {
       if (!AUDIO_EXTENSIONS.has(file.extension.toLowerCase())) return
       menu.addItem((item) =>
         item
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setTitle('Process with Igggy')
           .setIcon('mic')
           .onClick(() => { void processAudioFile(plugin, file) })

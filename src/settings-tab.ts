@@ -13,17 +13,18 @@ export class IgggySettingsTab extends PluginSettingTab {
     const { containerEl } = this
     containerEl.empty()
 
-    new Setting(containerEl).setName('Igggy').setHeading()
-
     // ── Transcription ──────────────────────────────────────────────
     new Setting(containerEl).setName('Transcription').setHeading()
 
     new Setting(containerEl)
       .setName('Provider')
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc('OpenAI Whisper works with just an OpenAI key. Deepgram adds speaker diarization.')
       .addDropdown((dd) =>
         dd
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .addOption('openai', 'OpenAI Whisper')
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .addOption('deepgram', 'Deepgram Nova-3')
           .setValue(this.plugin.settings.transcriptionProvider)
           .onChange(async (value) => {
@@ -33,11 +34,13 @@ export class IgggySettingsTab extends PluginSettingTab {
       )
 
     new Setting(containerEl)
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setName('OpenAI API key')
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc('Used for Whisper transcription and/or GPT-4o summarization.')
       .addText((text) =>
         text
-          .setPlaceholder('sk-...')
+          .setPlaceholder('Paste your key')
           .setValue(this.plugin.settings.openaiKey)
           .onChange(async (value) => {
             this.plugin.settings.openaiKey = value.trim()
@@ -47,10 +50,11 @@ export class IgggySettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Deepgram API key')
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc('Required when using Deepgram as the transcription provider.')
       .addText((text) =>
         text
-          .setPlaceholder('your-deepgram-key')
+          .setPlaceholder('Paste your key')
           .setValue(this.plugin.settings.deepgramKey)
           .onChange(async (value) => {
             this.plugin.settings.deepgramKey = value.trim()
@@ -63,10 +67,13 @@ export class IgggySettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Provider')
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc('GPT-4o Mini works with your OpenAI key. Claude Sonnet delivers higher quality notes.')
       .addDropdown((dd) =>
         dd
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .addOption('openai', 'GPT-4o Mini')
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .addOption('anthropic', 'Claude Sonnet')
           .setValue(this.plugin.settings.summarizationProvider)
           .onChange(async (value) => {
@@ -77,10 +84,11 @@ export class IgggySettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Anthropic API key')
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc('Required when using Claude as the summarization provider.')
       .addText((text) =>
         text
-          .setPlaceholder('sk-ant-...')
+          .setPlaceholder('Paste your key')
           .setValue(this.plugin.settings.anthropicKey)
           .onChange(async (value) => {
             this.plugin.settings.anthropicKey = value.trim()

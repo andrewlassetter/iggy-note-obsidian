@@ -29,6 +29,7 @@ export default class IgggyPlugin extends Plugin {
     await this.loadSettings()
 
     // ── Ribbon icon ─────────────────────────────────────────────────────────────
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     this.addRibbonIcon('audio-waveform', 'Process audio with Igggy', () =>
       openAudioFilePicker(this)
     )
@@ -102,7 +103,7 @@ export default class IgggyPlugin extends Plugin {
 
   private async startRecording(): Promise<void> {
     if (this.activeRecording) {
-      new Notice('Igggy: A recording is already in progress.', 4000)
+      new Notice('A recording is already in progress.', 4000)
       return
     }
 
@@ -119,9 +120,9 @@ export default class IgggyPlugin extends Plugin {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes('NotAllowedError') || message.includes('Permission denied')) {
-        new Notice('Igggy: Microphone access denied. Allow microphone access and try again.', 6000)
+        new Notice('Microphone access denied — allow microphone access and try again.', 6000)
       } else if (message.includes('NotFoundError') || message.includes('not found')) {
-        new Notice('Igggy: No microphone found. Connect a microphone and try again.', 6000)
+        new Notice('No microphone found — connect a microphone and try again.', 6000)
       } else {
         new Notice(`Igggy: Could not start recording \u2014 ${message}`, 6000)
       }
@@ -135,7 +136,7 @@ export default class IgggyPlugin extends Plugin {
       await this.app.workspace.getLeaf(false).openFile(placeholderFile)
     } catch (err) {
       console.error('[Igggy] Failed to create recording placeholder:', err)
-      new Notice('Igggy: Failed to create note file. Check your output folder setting.', 6000)
+      new Notice('Failed to create note file — check your output folder setting.', 6000)
       await session.stop()
       return
     }
