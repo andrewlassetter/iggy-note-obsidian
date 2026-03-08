@@ -192,7 +192,7 @@ class AudioFileSuggestModal extends SuggestModal<TFile> {
   }
 
   onChooseSuggestion(file: TFile): void {
-    processAudioFile(this.plugin, file)
+    void processAudioFile(this.plugin, file)
   }
 }
 
@@ -212,7 +212,7 @@ export function registerMenus(plugin: IgggyPlugin): void {
         item
           .setTitle('Process with Igggy')
           .setIcon('mic')
-          .onClick(() => processAudioFile(plugin, file))
+          .onClick(() => { void processAudioFile(plugin, file) })
       )
     })
   )
@@ -227,7 +227,7 @@ export function registerMenus(plugin: IgggyPlugin): void {
         item
           .setTitle('Process with Igggy')
           .setIcon('mic')
-          .onClick(() => processAudioFile(plugin, file))
+          .onClick(() => { void processAudioFile(plugin, file) })
       )
     })
   )
@@ -244,7 +244,7 @@ export function registerCommands(plugin: IgggyPlugin): void {
       const file = plugin.app.workspace.getActiveFile()
       if (!file) return false
       if (!AUDIO_EXTENSIONS.has(file.extension.toLowerCase())) return false
-      if (!checking) processAudioFile(plugin, file)
+      if (!checking) void processAudioFile(plugin, file)
       return true
     },
   })

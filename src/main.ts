@@ -77,7 +77,7 @@ export default class IgggyPlugin extends Plugin {
     })
 
     this.addSettingTab(new IgggySettingsTab(this.app, this))
-    console.log('[Igggy] Plugin loaded')
+    console.debug('[Igggy] Plugin loaded')
   }
 
   onunload(): void {
@@ -87,7 +87,7 @@ export default class IgggyPlugin extends Plugin {
       this.activeRecording = null
     }
     this.clearStatusBar()
-    console.log('[Igggy] Plugin unloaded')
+    console.debug('[Igggy] Plugin unloaded')
   }
 
   async loadSettings(): Promise<void> {

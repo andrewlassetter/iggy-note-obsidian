@@ -13,10 +13,10 @@ export class IgggySettingsTab extends PluginSettingTab {
     const { containerEl } = this
     containerEl.empty()
 
-    containerEl.createEl('h2', { text: 'Igggy' })
+    new Setting(containerEl).setName('Igggy').setHeading()
 
     // ── Transcription ──────────────────────────────────────────────
-    containerEl.createEl('h3', { text: 'Transcription' })
+    new Setting(containerEl).setName('Transcription').setHeading()
 
     new Setting(containerEl)
       .setName('Provider')
@@ -59,7 +59,7 @@ export class IgggySettingsTab extends PluginSettingTab {
       )
 
     // ── Summarization ──────────────────────────────────────────────
-    containerEl.createEl('h3', { text: 'Summarization' })
+    new Setting(containerEl).setName('Summarization').setHeading()
 
     new Setting(containerEl)
       .setName('Provider')
@@ -89,7 +89,7 @@ export class IgggySettingsTab extends PluginSettingTab {
       )
 
     // ── Output ──────────────────────────────────────────────────────
-    containerEl.createEl('h3', { text: 'Output' })
+    new Setting(containerEl).setName('Output').setHeading()
 
     new Setting(containerEl)
       .setName('Output folder')
