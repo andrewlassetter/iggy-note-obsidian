@@ -109,6 +109,24 @@ export class RecordingSession {
     }
   }
 
+  // ── Mute / unmute ──────────────────────────────────────────────────────────
+
+  /** Mute the microphone without stopping the recording (track enabled = false). */
+  mute(): void {
+    this.stream.getAudioTracks().forEach(t => { t.enabled = false })
+  }
+
+  /** Restore microphone audio after muting. */
+  unmute(): void {
+    this.stream.getAudioTracks().forEach(t => { t.enabled = true })
+  }
+
+  /** Returns true when at least one audio track is muted. */
+  isMuted(): boolean {
+    const tracks = this.stream.getAudioTracks()
+    return tracks.length > 0 && !tracks[0].enabled
+  }
+
   /** Elapsed wall-clock seconds, paused time excluded. */
   getElapsedSec(): number {
     const now = Date.now()

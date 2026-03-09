@@ -15,6 +15,7 @@ import {
   setRecordingState,
   transitionToProcessing,
 } from './notes/writer'
+import { RECORDING_VIEW_TYPE, RecordingView } from './ui/recording-view'
 
 export default class IgggyPlugin extends Plugin {
   settings!: IgggySettings
@@ -28,10 +29,16 @@ export default class IgggyPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings()
 
+    // ── Recording View (sidebar panel) ───────────────────────────────────────────
+    this.registerView(
+      RECORDING_VIEW_TYPE,
+      (leaf) => new RecordingView(leaf, this)
+    )
+
     // ── Ribbon icon ─────────────────────────────────────────────────────────────
     // eslint-disable-next-line obsidianmd/ui/sentence-case
-    this.addRibbonIcon('audio-waveform', 'Process audio with Igggy', () =>
-      openAudioFilePicker(this)
+    this.addRibbonIcon('audio-waveform', 'Open Igggy recording panel', () =>
+      void this.activateRecordingView()
     )
 
     // ── Waveform code block processor ────────────────────────────────────────────
@@ -89,6 +96,18 @@ export default class IgggyPlugin extends Plugin {
     }
     this.clearStatusBar()
     console.debug('[Igggy] Plugin unloaded')
+  }
+
+  // ── Recording View ────────────────────────────────────────────────────────────
+
+  async activateRecordingView(): Promise<void> {
+    const { workspace } = this.app
+    let leaf = workspace.getLeavesOfType(RECORDING_VIEW_TYPE)[0]
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(false)
+      await leaf.setViewState({ type: RECORDING_VIEW_TYPE, active: true })
+    }
+    workspace.revealLeaf(leaf)
   }
 
   async loadSettings(): Promise<void> {

@@ -66,5 +66,12 @@ function parseNoteContent(text: string): NoteContent {
   parsed.decisions = parsed.decisions ?? []
   parsed.actionItems = parsed.actionItems ?? []
 
+  // For LECTURE notes, route keyTerms into the decisions field (lectures never have
+  // decisions). Mirrors the same logic in web app validate.ts.
+  if (parsed.noteType === 'LECTURE' && Array.isArray(parsed.keyTerms) && parsed.keyTerms.length > 0) {
+    parsed.decisions = parsed.keyTerms
+  }
+  delete parsed.keyTerms
+
   return parsed as NoteContent
 }

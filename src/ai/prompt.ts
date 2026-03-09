@@ -41,11 +41,12 @@ ${contextHint}Identify the recording type:
 - "ONE_ON_ONE" — conversation between exactly two people (1:1 meeting, interview, pair call)
 - "MEMO" — one person capturing their own thoughts, ideas, to-dos, or reflections
 - "JOURNAL" — personal journal entry: reflective, introspective, or diary-style
+- "LECTURE" — a one-sided talk: class, presentation, conference talk, or speech. The recorder is a passive listener.
 
 Return a JSON object with ALL of these fields:
 
 {
-  "noteType": "MEETING" | "ONE_ON_ONE" | "MEMO" | "JOURNAL",
+  "noteType": "MEETING" | "ONE_ON_ONE" | "MEMO" | "JOURNAL" | "LECTURE",
 
   "title": "A specific, descriptive title (5–8 words). Useful months from now — not 'Team meeting' but 'Q3 launch timeline and owner assignments'.",
 
@@ -67,6 +68,8 @@ Return a JSON object with ALL of these fields:
     "A fact: something explicitly decided OR completed/resolved during this recording"
   ],
 
+  "keyTerms": ["term1", "term2"],
+
   "actionItems": [
     {
       "content": "Task starting with a verb",
@@ -81,8 +84,18 @@ Rules — read carefully:
 - keyTopics: 3–6 topics covering the main threads. 2–4 concise bullets per topic. For memos, these are the main themes or ideas discussed.
 - content: 2–4 prose paragraphs. For meetings, a narrative recap. For memos, the key ideas expanded. Always populate even if it covers similar ground to keyTopics.
 - decisions: things explicitly decided, AND things completed or resolved during the recording (e.g. "deleted the project", "agreed to skip the release"). Stated as facts.
+- keyTerms: ONLY for LECTURE type. Flat list of technical terms, concepts, or frameworks introduced. Strings only. Return [] or omit for all other types.
 - actionItems: ONLY work that remains to be done AFTER this recording ends. If something was completed, decided, or resolved during the recording itself — it belongs in decisions, NOT actionItems.
 - NO DUPLICATE items between decisions and actionItems. If an item could fit both, put it in decisions.
 - If no actionItems exist, use []. If no decisions were made, use [].
-- Respond with only the JSON object — no preamble, no explanation, no markdown code fences`
+
+For LECTURE recordings:
+- summary: 2–4 sentences capturing the lecture's central thesis or learning objective.
+- keyTopics: the main concepts or arguments covered IN ORDER they were presented. Each bullet should be a complete, informative sentence. Aim for 5–8 highlights across 2–5 topic groups.
+- keyTerms: flat list of technical terms or key vocabulary introduced. Return [] if none.
+- decisions: return [] — lectures have no decisions.
+- actionItems: follow-up tasks for the listener only (assigned reading, practice, topics to research). Return [] if none mentioned.
+- Do NOT attribute statements to speakers by name.
+
+Respond with only the JSON object — no preamble, no explanation, no markdown code fences`
 }

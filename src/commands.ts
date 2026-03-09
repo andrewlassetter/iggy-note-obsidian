@@ -1,4 +1,4 @@
-import { Menu, Notice, SuggestModal, TFile } from 'obsidian'
+import { Menu, Notice, SuggestModal, TFile, requestUrl } from 'obsidian'
 import type IgggyPlugin from './main'
 import { preprocessAudio } from './audio/preprocessor'
 import { OpenAIWhisperProvider } from './audio/providers/openai'
@@ -13,15 +13,26 @@ import {
 } from './notes/writer'
 
 const AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm', 'ogg', 'flac', 'aac', 'mp4'])
+const APP_URL = 'https://app.igggy.ai'
 
 // ── Key validation ────────────────────────────────────────────────────────────
 
 /**
  * Checks that all API keys required by the current provider selections are present.
  * Returns a user-facing error string if a key is missing, or null if everything is valid.
+ * In hosted mode, keys are not required — validates auth tokens instead.
  */
 export function validateKeys(plugin: IgggyPlugin): string | null {
   const { settings } = plugin
+
+  // Hosted mode — no BYOK keys needed
+  if (settings.mode === 'hosted') {
+    if (!settings.hostedAccessToken || !settings.hostedRefreshToken) {
+      return 'Igggy: Sign in to the hosted plan. Open plugin settings → Hosted mode.'
+    }
+    return null
+  }
+
   if (settings.transcriptionProvider === 'openai' && !settings.openaiKey) {
     return 'Igggy: OpenAI API key required. Open plugin settings to add it.'
   }
@@ -35,6 +46,205 @@ export function validateKeys(plugin: IgggyPlugin): string | null {
     return 'Igggy: OpenAI API key required. Open plugin settings to add it.'
   }
   return null
+}
+
+// ── Hosted: token refresh ─────────────────────────────────────────────────────
+
+/**
+ * Returns a valid Bearer token for the hosted tier.
+ * If the current access token is near expiry, refreshes it automatically and
+ * saves the new tokens to plugin settings.
+ */
+// Supabase project constants (public values — safe to embed in plugin)
+const SUPABASE_URL = 'https://fgxhtrwvpzawbnnlphji.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZneGh0cnd2cHphd2JubmxwaGppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0OTA0NTgsImV4cCI6MjA4ODA2NjQ1OH0.cH2Qp9UQmMeoBBA4EsndybNDBFaZSzsPzY4mJfQqaTI'
+
+async function getHostedToken(plugin: IgggyPlugin): Promise<string> {
+  const { settings } = plugin
+
+  // Refresh if within 60 seconds of expiry
+  const nearExpiry = Date.now() > settings.hostedTokenExpiry - 60_000
+
+  if (nearExpiry && settings.hostedRefreshToken) {
+    try {
+      const res = await requestUrl({
+        url: `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ refresh_token: settings.hostedRefreshToken }),
+      })
+
+      const body = res.json as { access_token?: string; refresh_token?: string; expires_at?: number }
+
+      if (body.access_token) {
+        plugin.settings.hostedAccessToken = body.access_token
+        if (body.refresh_token) plugin.settings.hostedRefreshToken = body.refresh_token
+        // expires_at from Supabase is in seconds
+        if (body.expires_at) plugin.settings.hostedTokenExpiry = body.expires_at * 1000
+        await plugin.saveSettings()
+        return body.access_token
+      }
+    } catch (err) {
+      console.error('[Igggy] Token refresh failed:', err)
+      // Fall through to use existing token and let the server reject it
+    }
+  }
+
+  return settings.hostedAccessToken
+}
+
+// ── Hosted: API pipeline ──────────────────────────────────────────────────────
+
+interface HostedNoteResult {
+  id: string
+  title: string
+  createdAt: string
+  noteType: string
+  aiSummary: string
+  keyTopics: string | null
+  content: string | null
+  decisions: string | null
+  audioDurationSec: number | null
+  rawTranscript: string
+  tasks: Array<{ id: string; content: string; owner: string | null; done: boolean; sourceSegment: string | null }>
+}
+
+/**
+ * Hosted processing pipeline: upload audio to Igggy web app → server handles
+ * transcription + summarization → fetch note → write to vault.
+ */
+async function runHostedPipeline(
+  plugin: IgggyPlugin,
+  placeholderFile: TFile,
+  rawBuffer: ArrayBuffer,
+  filename: string,
+  firstStageLine: string,
+  audioPath?: string,
+  embedAudio = false
+): Promise<void> {
+  const { app } = plugin
+  let step = 'preparing upload'
+
+  try {
+    const token = await getHostedToken(plugin)
+    const authHeader = { Authorization: `Bearer ${token}` }
+
+    // ── Step 1: Get presigned upload URL ─────────────────────────────────────
+    await updatePlaceholderStage(app, placeholderFile, [
+      firstStageLine,
+      '☁️ Uploading audio…',
+    ])
+    step = 'getting upload URL'
+
+    const urlRes = await requestUrl({
+      url: `${APP_URL}/api/upload-url`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader },
+      body: JSON.stringify({ filename }),
+    })
+
+    const { signedUrl, path: storagePath } = urlRes.json as { signedUrl: string; path: string }
+
+    // ── Step 2: PUT audio to Supabase Storage (presigned URL) ─────────────────
+    step = 'uploading audio'
+    const putRes = await requestUrl({
+      url: signedUrl,
+      method: 'PUT',
+      body: rawBuffer,
+      headers: { 'Content-Type': 'audio/webm' },
+    })
+
+    if (putRes.status >= 300) {
+      throw new Error(`Upload to storage failed (${putRes.status})`)
+    }
+
+    // ── Step 3: Trigger server-side transcription + summarization ─────────────
+    step = 'processing note'
+    await updatePlaceholderStage(app, placeholderFile, [
+      firstStageLine,
+      '☁️ Audio uploaded ✓',
+      '✨ Processing your note…',
+    ])
+
+    const uploadRes = await requestUrl({
+      url: `${APP_URL}/api/upload`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader },
+      body: JSON.stringify({ storagePath }),
+    })
+
+    if (uploadRes.status === 402) {
+      throw new Error('Free recordings used up — upgrade your Igggy plan at app.igggy.ai')
+    }
+    if (uploadRes.status >= 300) {
+      const err = (uploadRes.json as { error?: string }).error ?? 'Processing failed'
+      throw new Error(err)
+    }
+
+    const { noteId } = uploadRes.json as { noteId: string }
+
+    // ── Step 4: Fetch note content ────────────────────────────────────────────
+    step = 'fetching note'
+    const noteRes = await requestUrl({
+      url: `${APP_URL}/api/notes/${noteId}`,
+      headers: { ...authHeader },
+    })
+
+    const { note } = noteRes.json as { note: HostedNoteResult }
+
+    // ── Step 5: Convert and write to vault ────────────────────────────────────
+    step = 'writing note'
+    await finalizePlaceholderFromHosted(app, placeholderFile, note, {
+      audioPath,
+      embedAudio,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`[Igggy] Hosted pipeline error during "${step}":`, err)
+    await setPlaceholderError(app, placeholderFile, step, message)
+  }
+}
+
+/**
+ * Adapts the web app note format into the plugin's finalizePlaceholder call.
+ */
+async function finalizePlaceholderFromHosted(
+  app: IgggyPlugin['app'],
+  placeholderFile: TFile,
+  note: HostedNoteResult,
+  opts: { audioPath?: string; embedAudio?: boolean }
+): Promise<void> {
+  // Parse JSON fields stored as strings in the DB
+  const keyTopics = note.keyTopics
+    ? JSON.parse(note.keyTopics) as Array<{ topic: string; bullets: string[] }>
+    : []
+  const content = note.content ? JSON.parse(note.content) as string[] : []
+  const decisions = note.decisions ? JSON.parse(note.decisions) as string[] : []
+
+  const noteContent = {
+    title: note.title,
+    noteType: note.noteType as 'MEETING' | 'ONE_ON_ONE' | 'MEMO' | 'JOURNAL',
+    summary: note.aiSummary,
+    keyTopics,
+    content,
+    decisions,
+    actionItems: note.tasks.map((t) => ({
+      content: t.content,
+      owner: t.owner ?? null,
+      context: t.sourceSegment ?? '',
+    })),
+  }
+
+  await finalizePlaceholder(app, placeholderFile, noteContent, {
+    date: new Date(note.createdAt).toISOString().slice(0, 10),
+    transcript: note.rawTranscript,
+    durationSec: note.audioDurationSec ?? undefined,
+    audioPath: opts.audioPath,
+    embedAudio: opts.embedAudio ?? false,
+  })
 }
 
 // ── Shared processing pipeline ────────────────────────────────────────────────
@@ -141,8 +351,6 @@ async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void>
     return
   }
 
-  const date = new Date().toISOString().slice(0, 10)
-
   let rawBuffer: ArrayBuffer
   try {
     rawBuffer = await app.vault.readBinary(file)
@@ -153,17 +361,32 @@ async function processAudioFile(plugin: IgggyPlugin, file: TFile): Promise<void>
     return
   }
 
-  await runProcessingPipeline(
-    plugin,
-    placeholderFile,
-    rawBuffer,
-    file.name,
-    date,
-    new Date(file.stat.ctime),
-    '\uD83D\uDCC2 Reading audio \u2713',
-    settings.embedAudio ? file.path : undefined,
-    settings.embedAudio
-  )
+  const firstStageLine = '\uD83D\uDCC2 Reading audio \u2713'
+
+  if (settings.mode === 'hosted') {
+    await runHostedPipeline(
+      plugin,
+      placeholderFile,
+      rawBuffer,
+      file.name,
+      firstStageLine,
+      settings.embedAudio ? file.path : undefined,
+      settings.embedAudio
+    )
+  } else {
+    const date = new Date().toISOString().slice(0, 10)
+    await runProcessingPipeline(
+      plugin,
+      placeholderFile,
+      rawBuffer,
+      file.name,
+      date,
+      new Date(file.stat.ctime),
+      firstStageLine,
+      settings.embedAudio ? file.path : undefined,
+      settings.embedAudio
+    )
+  }
 }
 
 // ── File Picker Modal ─────────────────────────────────────────────────────────

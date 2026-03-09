@@ -73,3 +73,142 @@
 .igggy-waveform-label {
   opacity: 0.8;
 }
+
+/* ── Recording View (sidebar panel) ─────────────────────────────────────────
+   Uses Obsidian CSS variables for theme compatibility (dark + light modes).
+   ────────────────────────────────────────────────────────────────────────── */
+
+.igggy-recording-view {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  gap: 16px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.igggy-rv-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.igggy-rv-title {
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-normal);
+}
+
+.igggy-rv-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+
+.igggy-rv-btn-primary {
+  width: 100%;
+  padding: 10px 16px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.igggy-rv-btn-primary:hover { opacity: 0.85; }
+.igggy-rv-btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.igggy-rv-btn-secondary {
+  width: 100%;
+  padding: 8px 16px;
+  background: var(--background-modifier-form-field);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.igggy-rv-btn-secondary:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* Side-by-side controls (Pause + Stop, Resume + Stop, Delete + Create note) */
+.igggy-rv-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.igggy-rv-controls .igggy-rv-btn-primary,
+.igggy-rv-controls .igggy-rv-btn-secondary {
+  flex: 1;
+  width: auto;
+}
+
+/* ── Waveform area (recording view uses existing .igggy-* classes) ─────────── */
+
+.igggy-rv-waveform-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.igggy-rv-timer { font-variant-numeric: tabular-nums; }
+.igggy-rv-waveform-label { opacity: 0.8; }
+
+/* ── Confirm step (stopped state) ─────────────────────────────────────────── */
+
+.igggy-rv-summary {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.igggy-rv-summary-title {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--text-normal);
+  margin: 0;
+}
+
+.igggy-rv-summary-detail {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── Status text ───────────────────────────────────────────────────────────── */
+
+.igggy-rv-hint {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  text-align: center;
+  margin: 0;
+}
+
+.igggy-rv-warning {
+  font-size: 0.8em;
+  color: var(--text-warning, #e6a23c);
+  text-align: center;
+  margin: 0;
+}
+
+.igggy-rv-error {
+  font-size: 0.8em;
+  color: var(--text-error, #e06060);
+  text-align: center;
+  margin: 0;
+}

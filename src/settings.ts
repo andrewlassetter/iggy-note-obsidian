@@ -1,24 +1,40 @@
 export interface IgggySettings {
+  // Connection mode
+  mode: 'byok' | 'hosted'  // Default: 'byok'
+
+  // ── BYOK — user provides their own API keys ─────────────────────────────────
+
   // Transcription
   transcriptionProvider: 'openai' | 'deepgram'
   openaiKey: string       // used for Whisper and optionally GPT-4o
+  deepgramKey: string
 
   // Summarization
   summarizationProvider: 'openai' | 'anthropic'
-  deepgramKey: string
   anthropicKey: string
 
-  // Output
+  // ── Hosted — authenticated via Igggy web app ────────────────────────────────
+
+  hostedAccessToken: string   // Supabase access_token (JWT)
+  hostedRefreshToken: string  // Supabase refresh_token
+  hostedTokenExpiry: number   // Unix timestamp in ms when access_token expires
+
+  // ── Output ──────────────────────────────────────────────────────────────────
+
   outputFolder: string    // vault folder, e.g. "Igggy"
   embedAudio: boolean     // embed ![[recording.m4a]] link in generated note
 }
 
 export const DEFAULT_SETTINGS: IgggySettings = {
+  mode: 'byok',
   transcriptionProvider: 'openai',
   summarizationProvider: 'openai',
   openaiKey: '',
   deepgramKey: '',
   anthropicKey: '',
+  hostedAccessToken: '',
+  hostedRefreshToken: '',
+  hostedTokenExpiry: 0,
   outputFolder: 'Igggy',
   embedAudio: true,
 }

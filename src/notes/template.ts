@@ -46,10 +46,13 @@ export function generateMarkdown(data: NoteTemplateData): string {
           .join('\n\n')}`
       : null
 
-  // --- Decisions ---
+  // --- Decisions / Key Terms ---
+  // For LECTURE notes, the decisions field stores keyTerms (see providers/claude.ts).
   const decisionsSection =
     decisions.length > 0
-      ? `## Decisions\n\n${decisions.map((d) => `- ${d}`).join('\n')}`
+      ? noteType === 'LECTURE'
+        ? `## Key Terms\n\n${decisions.map((d) => `- ${d}`).join('\n')}`
+        : `## Decisions\n\n${decisions.map((d) => `- ${d}`).join('\n')}`
       : null
 
   // --- Tasks ---
