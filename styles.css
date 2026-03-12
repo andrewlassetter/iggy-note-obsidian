@@ -194,6 +194,34 @@
   margin: 0;
 }
 
+/* ── Custom prompt textarea (confirm step) ─────────────────────────────────── */
+
+.igggy-rv-custom-prompt {
+  padding: 0;
+}
+
+.igggy-rv-custom-prompt-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--background-modifier-form-field);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 0.82em;
+  font-family: inherit;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.igggy-rv-custom-prompt-input::placeholder {
+  color: var(--text-faint);
+}
+
+.igggy-rv-custom-prompt-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
 /* ── Status text ───────────────────────────────────────────────────────────── */
 
 .igggy-rv-hint {

@@ -68,6 +68,7 @@ export class RecordingView extends ItemView {
   private capturedAt: Date | null = null
   private errorMsg = ''
   private processLabel = ''
+  private customPrompt = ''
 
   // ── Active handles (cancelled in onClose) ──────────────────────────────────
   private timerInterval: ReturnType<typeof setInterval> | null = null
@@ -269,6 +270,18 @@ export class RecordingView extends ItemView {
         }`
       : this.formatDuration(this.finalElapsed)
     summary.createEl('p', { text: detail, cls: 'igggy-rv-summary-detail' })
+
+    // Custom prompt textarea — optional instructions for the AI
+    const promptContainer = body.createDiv({ cls: 'igggy-rv-custom-prompt' })
+    const promptTextarea = promptContainer.createEl('textarea', {
+      placeholder: 'What do you want from this note? (optional)',
+      cls: 'igggy-rv-custom-prompt-input',
+    })
+    promptTextarea.rows = 2
+    promptTextarea.value = this.customPrompt
+    promptTextarea.addEventListener('input', () => {
+      this.customPrompt = promptTextarea.value
+    })
 
     const controls = body.createDiv({ cls: 'igggy-rv-controls' })
     controls.createEl('button', { text: 'Delete recording', cls: 'igggy-rv-btn-secondary' })
@@ -521,6 +534,8 @@ export class RecordingView extends ItemView {
     this.processLabel = 'Processing…'
     this.transition('processing')
 
+    const promptForPipeline = this.customPrompt.trim() || undefined
+
     try {
       await runProcessingPipeline(
         this.plugin,
@@ -531,7 +546,8 @@ export class RecordingView extends ItemView {
         capturedAt,
         '🎙️ Recording ready ✓',
         undefined,
-        false
+        false,
+        promptForPipeline
       )
     } catch (err) {
       this.errorMsg = err instanceof Error ? err.message : 'Processing failed'
@@ -539,6 +555,7 @@ export class RecordingView extends ItemView {
       return
     }
 
+    this.customPrompt = ''
     this.transition('idle')
   }
 
@@ -547,6 +564,7 @@ export class RecordingView extends ItemView {
     const file = this.placeholderFile
     this.blob = null
     this.placeholderFile = null
+    this.customPrompt = ''
     this.plugin.recordingPlaceholder = null
     if (file) {
       try {

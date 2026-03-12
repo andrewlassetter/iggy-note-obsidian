@@ -303,7 +303,8 @@ export async function runProcessingPipeline(
   capturedAt: Date,
   firstStageLine: string,
   audioPath?: string,
-  embedAudio = false
+  embedAudio = false,
+  customPrompt?: string
 ): Promise<void> {
   const { app, settings } = plugin
   let step = 'pre-processing audio'
@@ -359,7 +360,7 @@ export async function runProcessingPipeline(
       '\u2728 Generating note\u2026',
     ])
 
-    const noteContent = await summarizationProvider.summarize(transcript, { durationSec, capturedAt }, { analysis })
+    const noteContent = await summarizationProvider.summarize(transcript, { durationSec, capturedAt }, { analysis, customPrompt })
 
     // ── Finalize ─────────────────────────────────────────────────────────────
     step = 'writing note'
@@ -510,14 +511,26 @@ async function regenerateNote(
   }
 
   // ── 2. Extract transcript ───────────────────────────────────────────────────
-  const transcriptMatch = content.match(
-    /## Transcript\n\n<details>\n<summary>Full transcript<\/summary>\n\n([\s\S]*?)\n\n<\/details>/
+  let transcript: string | undefined
+
+  // Try <details> pattern first (plugin-generated notes)
+  const detailsMatch = content.match(
+    /## Transcript\s*\n+<details>\s*\n*<summary>Full transcript<\/summary>\s*\n+([\s\S]*?)\n*\s*<\/details>/
   )
-  if (!transcriptMatch) {
+  if (detailsMatch) {
+    transcript = detailsMatch[1].trim()
+  } else {
+    // Fall back to bare transcript (web app synced notes)
+    const bareMatch = content.match(/## Transcript\s*\n+([\s\S]*?)(?=\n## |\n---\s*$|$)/)
+    if (bareMatch) {
+      transcript = bareMatch[1].trim()
+    }
+  }
+
+  if (!transcript) {
     new Notice('Igggy: This note has no transcript \u2014 cannot regenerate.', 5000)
     return
   }
-  const transcript = transcriptMatch[1]
 
   // ── 3. Run AI ───────────────────────────────────────────────────────────────
   new Notice('Regenerating note\u2026', 3000)
