@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: IgggySettings = {
   noteDensity: 'standard',
   outputFolder: 'Igggy',
   embedAudio: true,
-  showTasks: true,
+  showTasks: false,
   cloudBackupEnabled: false,
   folderSyncEnabled: false,
   lastSyncedAt: null,

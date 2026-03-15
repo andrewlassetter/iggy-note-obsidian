@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian'
 import type IgggyPlugin from './main'
 import { reindexVault } from './sync/reindex'
+import { TASKS_ENABLED } from './feature-flags'
 
 const APP_URL = 'https://app.igggy.ai'
 
@@ -103,15 +104,17 @@ export class IgggySettingsTab extends PluginSettingTab {
         })
       )
 
-    new Setting(containerEl)
-      .setName('Show tasks section in notes')
-      .setDesc('Include the Tasks section in generated notes. Tasks are still extracted by the AI when disabled — they just won\'t appear in the note.')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.showTasks).onChange(async (value) => {
-          this.plugin.settings.showTasks = value
-          await this.plugin.saveSettings()
-        })
-      )
+    if (TASKS_ENABLED) {
+      new Setting(containerEl)
+        .setName('Show tasks section in notes')
+        .setDesc('Include the Tasks section in generated notes. Tasks are still extracted by the AI when disabled — they just won\'t appear in the note.')
+        .addToggle((toggle) =>
+          toggle.setValue(this.plugin.settings.showTasks).onChange(async (value) => {
+            this.plugin.settings.showTasks = value
+            await this.plugin.saveSettings()
+          })
+        )
+    }
 
     // ── Folder & Sync ─────────────────────────────────────────────
     new Setting(containerEl).setName('Folder & Sync').setHeading()

@@ -1,6 +1,7 @@
 import { App, Modal, Setting, TFile } from 'obsidian'
 import type { NoteType } from '@igggy/core'
 import type IgggyPlugin from '../main'
+import { TASKS_ENABLED } from '../feature-flags'
 
 export interface RegenOptions {
   density: 'concise' | 'standard' | 'detailed'
@@ -74,14 +75,16 @@ export class RegenerateModal extends Modal {
     }
 
     // ── Include tasks toggle ──────────────────────────────────────────────────
-    new Setting(contentEl)
-      .setName('Include tasks')
-      .setDesc('Show the Tasks section in the regenerated note.')
-      .addToggle((toggle) =>
-        toggle.setValue(this.includeTasks).onChange((value) => {
-          this.includeTasks = value
-        })
-      )
+    if (TASKS_ENABLED) {
+      new Setting(contentEl)
+        .setName('Include tasks')
+        .setDesc('Show the Tasks section in the regenerated note.')
+        .addToggle((toggle) =>
+          toggle.setValue(this.includeTasks).onChange((value) => {
+            this.includeTasks = value
+          })
+        )
+    }
 
     // ── Custom instructions ───────────────────────────────────────────────────
     new Setting(contentEl)

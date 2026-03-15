@@ -122,6 +122,15 @@ Structured documentation of product invariants and behavioral rules. Lives in `.
 | `../igggy-web/docs/contracts/frontmatter.md` | YAML frontmatter schema, metadata callout format, section layout by note type |
 | `../igggy-web/docs/contracts/api-endpoints.md` | Request/response contracts for endpoints this plugin consumes |
 | `../igggy-web/docs/contracts/settings-parity.md` | Settings that must exist on both platforms, defaults, known gaps |
+| `../igggy-web/docs/contracts/search.md` | FTS vector update invariant, search query format, vector must be updated after all note mutations |
+
+## Feature Flags
+
+`src/feature-flags.ts` contains launch-time feature visibility toggles.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `TASKS_ENABLED` | `false` | Hides task UI (settings toggle, regen modal toggle). Tasks are still extracted and stored in note metadata. Flip to `true` when ready to launch. |
 
 **Pre-ship checklist — before merging any change:**
 1. Identify which contracts are touched by the changed files
